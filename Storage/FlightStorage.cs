@@ -1,7 +1,5 @@
 ﻿using FlightPlanner.Models;
-using Microsoft.AspNetCore.Server.IIS;
 using System.Globalization;
-using System.Net;
 
 namespace FlightPlanner.Storage
 {
@@ -12,12 +10,10 @@ namespace FlightPlanner.Storage
 
         public void AddFlight(Flight flight)
         {
-            if (flight.From == null || flight.To == null || flight.Carrier == null || flight.Carrier == "" ||
-                flight.DepartureTime == null || flight.ArrivalTime == null ||
-                flight.From.Country == null || flight.From.City == null || flight.From.AirportCode == null ||
-                flight.From.Country == "" || flight.From.City == "" || flight.From.AirportCode == "" ||
-                flight.To.Country == null || flight.To.City == null || flight.To.AirportCode == null ||
-                flight.To.Country == "" || flight.To.City == "" || flight.To.AirportCode == "")
+            if (flight.From == null || flight.To == null || string.IsNullOrEmpty(flight.Carrier) ||
+                string.IsNullOrEmpty(flight.DepartureTime) || string.IsNullOrEmpty(flight.ArrivalTime) ||
+                string.IsNullOrEmpty(flight.From.Country) || string.IsNullOrEmpty(flight.From.City) || string.IsNullOrEmpty(flight.From.AirportCode) ||
+                string.IsNullOrEmpty(flight.To.Country) || string.IsNullOrEmpty(flight.To.City) || string.IsNullOrEmpty(flight.To.AirportCode))
             {
                 throw new Exceptions.InvalidFlightDetailsException();
             }
@@ -70,6 +66,58 @@ namespace FlightPlanner.Storage
         public void Clear()
         {
             _flightStorage.Clear();
+        }
+
+        public Airport[] SearchFlightByAirport(string searchPhrase)
+        {
+            searchPhrase = searchPhrase.Trim().ToUpper();
+
+            List<Airport> matchingAirports = _flightStorage.SelectMany(f => new List<Airport> { f.From, f.To })
+                .Where(airport =>
+                airport.Country.ToUpper().Contains(searchPhrase) ||
+                airport.City.ToUpper().Contains(searchPhrase) ||
+                airport.AirportCode.ToUpper().Contains(searchPhrase))
+                .ToList();
+
+            return matchingAirports.ToArray();
+        }
+
+        public PageResult SearchFlights(SearchFlightsRequest request)
+        {
+            if (request.FromAirportCode == request.ToAirportCode)
+            {
+                throw new Exceptions.InvalidFlightDetailsException();
+            }
+
+            var matchingFlights = _flightStorage.Where(flight =>
+                flight.From.AirportCode == request.FromAirportCode &&
+                flight.To.AirportCode == request.ToAirportCode &&
+                flight.DepartureTime.Contains(request.DepartureDate))
+                .ToArray();
+
+            int totalItems = matchingFlights.Length;
+
+            var page = 0;
+            if (totalItems > 0)
+            {
+                page = 1;
+            }
+
+            var pageResult = new PageResult
+            {
+                Page = page,
+                TotalItems = totalItems,
+                Items = matchingFlights
+            };
+
+            return pageResult;
+        }
+
+        public Flight FindFlightById(int id)
+        {
+            var flight = _flightStorage.FirstOrDefault(flight => flight.Id == id);
+
+            return flight;
         }
     }
 }

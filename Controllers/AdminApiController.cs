@@ -2,9 +2,7 @@
 using FlightPlanner.Models;
 using FlightPlanner.Storage;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Net;
 
 namespace FlightPlanner.Controllers
 {
@@ -14,6 +12,7 @@ namespace FlightPlanner.Controllers
     public class AdminApiController : ControllerBase
     {
         private readonly FlightStorage _storage;
+        private readonly static object _locker = new();
 
         public AdminApiController()
         {
@@ -33,8 +32,11 @@ namespace FlightPlanner.Controllers
         {
             try
             {
-                _storage.AddFlight(flight);
-                return Created("", flight);
+                lock (_locker)
+                {
+                    _storage.AddFlight(flight);
+                    return Created("", flight);
+                }
             }
             catch (FlightAlreadyExistsException)
             {
@@ -50,8 +52,11 @@ namespace FlightPlanner.Controllers
         [HttpDelete]
         public IActionResult DeleteFlight(int id)
         {
-            _storage.DeleteFlight(id);
-            return Ok();
+            lock (_locker)
+            {
+                _storage.DeleteFlight(id);
+                return Ok();
+            }
         }
     }
 }
