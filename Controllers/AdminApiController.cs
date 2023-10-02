@@ -14,16 +14,23 @@ namespace FlightPlanner.Controllers
         private readonly FlightStorage _storage;
         private readonly static object _locker = new();
 
-        public AdminApiController()
+        public AdminApiController(FlightStorage storage)
         {
-            _storage = new FlightStorage();
+            _storage = storage;
         }
 
         [Route("flights/{id}")]
         [HttpGet]
         public IActionResult GetFlight(int id)
         {
-            return NotFound();
+            var flight = _storage.GetFlight(id);
+
+            if (flight == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(flight);
         }
 
         [Route("flights")]
@@ -55,6 +62,7 @@ namespace FlightPlanner.Controllers
             lock (_locker)
             {
                 _storage.DeleteFlight(id);
+
                 return Ok();
             }
         }

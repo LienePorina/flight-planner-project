@@ -1,12 +1,17 @@
 ﻿using FlightPlanner.Models;
+using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 
 namespace FlightPlanner.Storage
 {
     public class FlightStorage
     {
-        private static List<Flight> _flightStorage = new List<Flight>();
-        private static int _id = 0;
+        private readonly FlightPlannerDbContext _context;
+
+        public FlightStorage(FlightPlannerDbContext context)
+        {
+            _context = context;
+        }
 
         public void AddFlight(Flight flight)
         {
@@ -39,24 +44,36 @@ namespace FlightPlanner.Storage
             }
             else
             {
-                flight.Id = _id++;
-                _flightStorage.Add(flight);
+                _context.Flights.Add(flight);
+                _context.SaveChanges();
             }
         }
 
         public void DeleteFlight(int flightId)
         {
-            Flight? flightToRemove = _flightStorage.FirstOrDefault(f => f.Id == flightId);
+            Flight? flightToRemove = _context.Flights.FirstOrDefault(f => f.Id == flightId);
 
             if (flightToRemove != null)
             {
-                _flightStorage.Remove(flightToRemove);
+                _context.Flights.Remove(flightToRemove);
+
+                if (flightToRemove.From != null)
+                {
+                    _context.Airports.Remove(flightToRemove.From);
+                }
+
+                if (flightToRemove.To != null)
+                {
+                    _context.Airports.Remove(flightToRemove.To);
+                }
             }
+
+            _context.SaveChanges();
         }
 
         public bool FlightExists(Flight flight)
         {
-            return _flightStorage.Any(existingFlight =>
+            return _context.Flights.Any(existingFlight =>
                 existingFlight.From.Country == flight.From.Country &&
                 existingFlight.From.City == flight.From.City &&
                 existingFlight.From.AirportCode == flight.From.AirportCode &&
@@ -65,21 +82,23 @@ namespace FlightPlanner.Storage
 
         public void Clear()
         {
-            _flightStorage.Clear();
+            _context.Flights.RemoveRange(_context.Flights);
+            _context.Airports.RemoveRange(_context.Airports);
+            _context.SaveChanges();
         }
 
         public Airport[] SearchFlightByAirport(string searchPhrase)
         {
             searchPhrase = searchPhrase.Trim().ToUpper();
 
-            List<Airport> matchingAirports = _flightStorage.SelectMany(f => new List<Airport> { f.From, f.To })
-                .Where(airport =>
-                airport.Country.ToUpper().Contains(searchPhrase) ||
-                airport.City.ToUpper().Contains(searchPhrase) ||
-                airport.AirportCode.ToUpper().Contains(searchPhrase))
-                .ToList();
+            var matchingAirports = _context.Airports
+                .AsEnumerable()
+                .Where(a => a.Country.ToUpper().Contains(searchPhrase) ||
+                            a.City.ToUpper().Contains(searchPhrase) ||
+                            a.AirportCode.ToUpper().Contains(searchPhrase))
+                .ToArray();
 
-            return matchingAirports.ToArray();
+            return matchingAirports;
         }
 
         public PageResult SearchFlights(SearchFlightsRequest request)
@@ -89,7 +108,7 @@ namespace FlightPlanner.Storage
                 throw new Exceptions.InvalidFlightDetailsException();
             }
 
-            var matchingFlights = _flightStorage.Where(flight =>
+            var matchingFlights = _context.Flights.Where(flight =>
                 flight.From.AirportCode == request.FromAirportCode &&
                 flight.To.AirportCode == request.ToAirportCode &&
                 flight.DepartureTime.Contains(request.DepartureDate))
@@ -113,11 +132,9 @@ namespace FlightPlanner.Storage
             return pageResult;
         }
 
-        public Flight FindFlightById(int id)
+        public Flight GetFlight(int id)
         {
-            var flight = _flightStorage.FirstOrDefault(flight => flight.Id == id);
-
-            return flight;
+            return _context.Flights.Include(f => f.From).Include(f => f.To).SingleOrDefault(f => f.Id == id);
         }
     }
 }

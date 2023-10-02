@@ -9,9 +9,9 @@ namespace FlightPlanner.Controllers
     {
         private readonly FlightStorage _storage;
 
-        public CleanupApiController()
+        public CleanupApiController(FlightStorage storage)
         {
-            _storage = new FlightStorage();
+            _storage = storage;
         }
 
         [Route("clear")]
